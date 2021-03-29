@@ -145,6 +145,36 @@ def convert_softmax_activation(node, **kwargs):
 
 @mx_op.MXNetGraph.register("UpSampling")
 def convert_upsample(node, **kwargs):
+    """Map MXNet's UpSampling operator attributes to onnx's Upsample operator
+    and return the created node.
+    """
+     
+    name, input_nodes, attrs = get_inputs(node, kwargs)
+     
+    sample_type = attrs.get('sample_type', 'nearest')
+    sample_type = 'linear' if sample_type == 'bilinear' else sample_type
+    scale = convert_string_to_list(attrs.get('scale'))
+    scaleh = scalew = float(scale[0])
+    if len(scale) > 1:
+        scaleh = float(scale[0])
+        scalew = float(scale[1])
+    scale = np.array([1.0, 1.0, scaleh, scalew], dtype=np.float32)
+    roi = np.array([], dtype=np.float32)
+    node_roi=create_helper_tensor_node(roi, name+'roi', kwargs)
+    node_sca=create_helper_tensor_node(scale, name+'scale', kwargs)
+     
+    node = onnx.helper.make_node(
+        'Resize',
+        inputs=[input_nodes[0], name+'roi', name+'scale'],
+        outputs=[name],
+        coordinate_transformation_mode='asymmetric',
+        mode=sample_type,
+        nearest_mode='floor',
+        name=name
+    )
+    return [node_roi, node_sca, node]
+'''
+def convert_upsample(node, **kwargs):
     """
     Map MXNet's UpSampling operator attributes to onnx's Upsample operator and return the created node.
     """
@@ -167,7 +197,7 @@ def convert_upsample(node, **kwargs):
         name=name
     )
     return [scale_node, node]
-
+'''
 
 @mx_op.MXNetGraph.register("Crop")
 def convert_crop(node, **kwargs):
